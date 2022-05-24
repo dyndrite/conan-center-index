@@ -23,6 +23,8 @@ patches:
       base_path: "source_subfolder"
     - patch_file: "patches/gtest-1.10.0-override.patch"
       base_path: "source_subfolder"
+    - patch_file: "patches/gtest-1.10.0-abseil.patch"
+      base_path: "source_subfolder"
   "1.8.1":
     - patch_file: "patches/gtest-1.8.1.patch"
       base_path: "source_subfolder"
