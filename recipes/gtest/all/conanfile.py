@@ -23,6 +23,7 @@ class GTestConan(ConanFile):
         "no_main": [True, False],
         "debug_postfix": "ANY",
         "hide_symbols": [True, False],
+        "with_abseil": [True, False],
     }
     default_options = {
         "shared": False,
@@ -31,9 +32,10 @@ class GTestConan(ConanFile):
         "no_main": False,
         "debug_postfix": "d",
         "hide_symbols": False,
+        "with_abseil": True,
     }
 
-    generators = "cmake"
+    generators = "cmake", "cmake_find_package", "cmake_find_package_multi"
 
     @property
     def _source_subfolder(self):
@@ -90,6 +92,10 @@ class GTestConan(ConanFile):
         if self.options.shared:
             del self.options.fPIC
 
+    def requirements(self):
+        if self.options.with_abseil:
+            self.requires("abseil/20211102.0")
+
     def validate(self):
         if self.options.shared and self._is_msvc and "MT" in msvc_runtime_flag(self):
             raise ConanInvalidConfiguration(
@@ -141,6 +147,9 @@ class GTestConan(ConanFile):
         cmake.definitions["BUILD_GMOCK"] = self.options.build_gmock
         if self.settings.os == "Windows" and self.settings.compiler == "gcc":
             cmake.definitions["gtest_disable_pthreads"] = True
+        if self.options.with_abseil:
+            cmake.definitions["GTEST_HAS_ABSL"] = "ON"
+            # cmake.definitions["absl_DIR"] = r"C:\Dyndrite\.conan\data\abseil\20211102.0\_\_\package\3fb49604f9c2f729b85ba3115852006824e72cab"
         cmake.definitions["gtest_hide_internal_symbols"] = self.options.hide_symbols
         cmake.configure(build_folder=self._build_subfolder)
         return cmake
@@ -182,6 +191,8 @@ class GTestConan(ConanFile):
                (str(self.settings.compiler) == "msvc" and tools.Version(self.settings.compiler.version) >= "191"):
                 self.cpp_info.components["libgtest"].defines.append("GTEST_LANG_CXX11=1")
                 self.cpp_info.components["libgtest"].defines.append("GTEST_HAS_TR1_TUPLE=0")
+        if self.options.with_abseil:
+            self.cpp_info.components["libgtest"].requires.extend(["abseil::abseil", "abseil::absl_strings", "abseil::absl_stacktrace", "abseil::absl_symbolize", "abseil::absl_failure_signal_handler", "abseil::absl_base"])
 
         # gtest_main
         if not self.options.no_main:

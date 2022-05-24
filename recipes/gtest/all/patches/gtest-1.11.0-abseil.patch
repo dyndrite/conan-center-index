@@ -1,0 +1,97 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ea81ab12..4daf35b5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,19 +1,21 @@
+ # Note: CMake support is community-based. The maintainers do not use CMake
+ # internally.
+
+-cmake_minimum_required(VERSION 2.8.12)
++cmake_minimum_required(VERSION 3.5)
+
+ if (POLICY CMP0048)
+   cmake_policy(SET CMP0048 NEW)
+ endif (POLICY CMP0048)
+
++if (POLICY CMP0077)
++  cmake_policy(SET CMP0077 NEW)
++endif (POLICY CMP0077)
++
+ project(googletest-distribution)
+ set(GOOGLETEST_VERSION 1.11.0)
+
+-if (CMAKE_VERSION VERSION_GREATER "3.0.2")
+-  if(NOT CYGWIN AND NOT MSYS AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL QNX)
+-    set(CMAKE_CXX_EXTENSIONS OFF)
+-  endif()
++if(NOT CYGWIN AND NOT MSYS AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL QNX)
++  set(CMAKE_CXX_EXTENSIONS OFF)
+ endif()
+
+ enable_testing()
+diff --git a/googletest/CMakeLists.txt b/googletest/CMakeLists.txt
+index abdd98b7..f5f4d6e4 100644
+--- a/googletest/CMakeLists.txt
++++ b/googletest/CMakeLists.txt
+@@ -46,14 +46,9 @@ endif()
+
+ # Project version:
+
+-if (CMAKE_VERSION VERSION_LESS 3.0)
+-  project(gtest CXX C)
+-  set(PROJECT_VERSION ${GOOGLETEST_VERSION})
+-else()
+-  cmake_policy(SET CMP0048 NEW)
+-  project(gtest VERSION ${GOOGLETEST_VERSION} LANGUAGES CXX C)
+-endif()
+-cmake_minimum_required(VERSION 2.8.12)
++cmake_minimum_required(VERSION 3.5)
++cmake_policy(SET CMP0048 NEW)
++project(gtest VERSION ${GOOGLETEST_VERSION} LANGUAGES CXX C)
+
+ if (POLICY CMP0063) # Visibility
+   cmake_policy(SET CMP0063 NEW)
+@@ -70,6 +65,8 @@ if(CMAKE_PROJECT_NAME STREQUAL "gtest" OR CMAKE_PROJECT_NAME STREQUAL "googletes
+   # make it prominent in the GUI.
+   option(BUILD_SHARED_LIBS "Build shared libraries (DLLs)." OFF)
+
++  option(GTEST_HAS_ABSL "Build against Google abseil" OFF)
++
+ else()
+
+   mark_as_advanced(
+@@ -96,6 +93,10 @@ config_compiler_and_linker()  # Defined in internal_utils.cmake.
+ # alias libraries
+ set(cmake_package_name GTest CACHE INTERNAL "")
+
++if(GTEST_HAS_ABSL)
++  find_package(absl CONFIG REQUIRED)
++endif()
++
+ # Create the CMake package file descriptors.
+ if (INSTALL_GTEST)
+   include(CMakePackageConfigHelpers)
+@@ -136,13 +137,21 @@ set_target_properties(gtest_main PROPERTIES VERSION ${GOOGLETEST_VERSION})
+ # to the targets for when we are part of a parent build (ie being pulled
+ # in via add_subdirectory() rather than being a standalone build).
+ if (DEFINED CMAKE_VERSION AND NOT "${CMAKE_VERSION}" VERSION_LESS "2.8.11")
++  string(REPLACE ";" "$<SEMICOLON>" dirs "${gtest_build_include_dirs}")
+   target_include_directories(gtest SYSTEM INTERFACE
+-    "$<BUILD_INTERFACE:${gtest_build_include_dirs}>"
++    "$<BUILD_INTERFACE:${dirs}>"
+     "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>")
+   target_include_directories(gtest_main SYSTEM INTERFACE
+-    "$<BUILD_INTERFACE:${gtest_build_include_dirs}>"
++    "$<BUILD_INTERFACE:${dirs}>"
+     "$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_INCLUDEDIR}>")
+ endif()
++if(CMAKE_SYSTEM_NAME MATCHES "QNX")
++  target_link_libraries(gtest PUBLIC regex)
++endif()
++if(GTEST_HAS_ABSL)
++  target_compile_definitions(gtest PUBLIC GTEST_HAS_ABSL=1)
++  target_link_libraries(gtest PUBLIC absl::strings absl::stacktrace absl::symbolize absl::failure_signal_handler absl::base)
++endif()
+ target_link_libraries(gtest_main PUBLIC gtest)
+
+ ########################################################################
