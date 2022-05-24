@@ -5,21 +5,21 @@ index ea81ab12..4daf35b5 100644
 @@ -1,19 +1,21 @@
  # Note: CMake support is community-based. The maintainers do not use CMake
  # internally.
-
+ 
 -cmake_minimum_required(VERSION 2.8.12)
 +cmake_minimum_required(VERSION 3.5)
-
+ 
  if (POLICY CMP0048)
    cmake_policy(SET CMP0048 NEW)
  endif (POLICY CMP0048)
-
+ 
 +if (POLICY CMP0077)
 +  cmake_policy(SET CMP0077 NEW)
 +endif (POLICY CMP0077)
 +
  project(googletest-distribution)
  set(GOOGLETEST_VERSION 1.11.0)
-
+ 
 -if (CMAKE_VERSION VERSION_GREATER "3.0.2")
 -  if(NOT CYGWIN AND NOT MSYS AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL QNX)
 -    set(CMAKE_CXX_EXTENSIONS OFF)
@@ -27,16 +27,16 @@ index ea81ab12..4daf35b5 100644
 +if(NOT CYGWIN AND NOT MSYS AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL QNX)
 +  set(CMAKE_CXX_EXTENSIONS OFF)
  endif()
-
+ 
  enable_testing()
 diff --git a/googletest/CMakeLists.txt b/googletest/CMakeLists.txt
-index abdd98b7..f5f4d6e4 100644
+index abdd98b7..bf670707 100644
 --- a/googletest/CMakeLists.txt
 +++ b/googletest/CMakeLists.txt
 @@ -46,14 +46,9 @@ endif()
-
+ 
  # Project version:
-
+ 
 -if (CMAKE_VERSION VERSION_LESS 3.0)
 -  project(gtest CXX C)
 -  set(PROJECT_VERSION ${GOOGLETEST_VERSION})
@@ -48,22 +48,22 @@ index abdd98b7..f5f4d6e4 100644
 +cmake_minimum_required(VERSION 3.5)
 +cmake_policy(SET CMP0048 NEW)
 +project(gtest VERSION ${GOOGLETEST_VERSION} LANGUAGES CXX C)
-
+ 
  if (POLICY CMP0063) # Visibility
    cmake_policy(SET CMP0063 NEW)
 @@ -70,6 +65,8 @@ if(CMAKE_PROJECT_NAME STREQUAL "gtest" OR CMAKE_PROJECT_NAME STREQUAL "googletes
    # make it prominent in the GUI.
    option(BUILD_SHARED_LIBS "Build shared libraries (DLLs)." OFF)
-
+ 
 +  option(GTEST_HAS_ABSL "Build against Google abseil" OFF)
 +
  else()
-
+ 
    mark_as_advanced(
 @@ -96,6 +93,10 @@ config_compiler_and_linker()  # Defined in internal_utils.cmake.
  # alias libraries
  set(cmake_package_name GTest CACHE INTERNAL "")
-
+ 
 +if(GTEST_HAS_ABSL)
 +  find_package(absl CONFIG REQUIRED)
 +endif()
@@ -71,7 +71,7 @@ index abdd98b7..f5f4d6e4 100644
  # Create the CMake package file descriptors.
  if (INSTALL_GTEST)
    include(CMakePackageConfigHelpers)
-@@ -136,13 +137,21 @@ set_target_properties(gtest_main PROPERTIES VERSION ${GOOGLETEST_VERSION})
+@@ -136,13 +137,22 @@ set_target_properties(gtest_main PROPERTIES VERSION ${GOOGLETEST_VERSION})
  # to the targets for when we are part of a parent build (ie being pulled
  # in via add_subdirectory() rather than being a standalone build).
  if (DEFINED CMAKE_VERSION AND NOT "${CMAKE_VERSION}" VERSION_LESS "2.8.11")
@@ -89,9 +89,253 @@ index abdd98b7..f5f4d6e4 100644
 +  target_link_libraries(gtest PUBLIC regex)
 +endif()
 +if(GTEST_HAS_ABSL)
++  message(STATUS "Setting GTEST_HAS_ABSL=1")
 +  target_compile_definitions(gtest PUBLIC GTEST_HAS_ABSL=1)
 +  target_link_libraries(gtest PUBLIC absl::strings absl::stacktrace absl::symbolize absl::failure_signal_handler absl::base)
 +endif()
  target_link_libraries(gtest_main PUBLIC gtest)
-
+ 
  ########################################################################
+diff --git a/googletest/include/gtest/gtest-printers.h b/googletest/include/gtest/gtest-printers.h
+index 076c9de1..6ba51653 100644
+--- a/googletest/include/gtest/gtest-printers.h
++++ b/googletest/include/gtest/gtest-printers.h
+@@ -755,11 +755,9 @@ class UniversalPrinter<Variant<T...>> {
+  public:
+   static void Print(const Variant<T...>& value, ::std::ostream* os) {
+     *os << '(';
+-#if GTEST_HAS_ABSL
++
+     absl::visit(Visitor{os, value.index()}, value);
+-#else
+-    std::visit(Visitor{os, value.index()}, value);
+-#endif  // GTEST_HAS_ABSL
++
+     *os << ')';
+   }
+ 
+diff --git a/googletest/include/gtest/internal/gtest-port.h b/googletest/include/gtest/internal/gtest-port.h
+index 0953a781..ad855d7e 100644
+--- a/googletest/include/gtest/internal/gtest-port.h
++++ b/googletest/include/gtest/internal/gtest-port.h
+@@ -2271,7 +2271,6 @@ const char* StringFromGTestEnv(const char* flag, const char* default_val);
+ 
+ #endif  // !defined(GTEST_INTERNAL_DEPRECATED)
+ 
+-#if GTEST_HAS_ABSL
+ // Always use absl::any for UniversalPrinter<> specializations if googletest
+ // is built with absl support.
+ #define GTEST_INTERNAL_HAS_ANY 1
+@@ -2281,25 +2280,9 @@ namespace internal {
+ using Any = ::absl::any;
+ }  // namespace internal
+ }  // namespace testing
+-#else
+-#ifdef __has_include
+-#if __has_include(<any>) && __cplusplus >= 201703L
+-// Otherwise for C++17 and higher use std::any for UniversalPrinter<>
+-// specializations.
+-#define GTEST_INTERNAL_HAS_ANY 1
+-#include <any>
+-namespace testing {
+-namespace internal {
+-using Any = ::std::any;
+-}  // namespace internal
+-}  // namespace testing
+-// The case where absl is configured NOT to alias std::any is not
+-// supported.
+-#endif  // __has_include(<any>) && __cplusplus >= 201703L
+-#endif  // __has_include
+-#endif  // GTEST_HAS_ABSL
+ 
+-#if GTEST_HAS_ABSL
++
++
+ // Always use absl::optional for UniversalPrinter<> specializations if
+ // googletest is built with absl support.
+ #define GTEST_INTERNAL_HAS_OPTIONAL 1
+@@ -2310,26 +2293,9 @@ template <typename T>
+ using Optional = ::absl::optional<T>;
+ }  // namespace internal
+ }  // namespace testing
+-#else
+-#ifdef __has_include
+-#if __has_include(<optional>) && __cplusplus >= 201703L
+-// Otherwise for C++17 and higher use std::optional for UniversalPrinter<>
+-// specializations.
+-#define GTEST_INTERNAL_HAS_OPTIONAL 1
+-#include <optional>
+-namespace testing {
+-namespace internal {
+-template <typename T>
+-using Optional = ::std::optional<T>;
+-}  // namespace internal
+-}  // namespace testing
+-// The case where absl is configured NOT to alias std::optional is not
+-// supported.
+-#endif  // __has_include(<optional>) && __cplusplus >= 201703L
+-#endif  // __has_include
+-#endif  // GTEST_HAS_ABSL
+ 
+-#if GTEST_HAS_ABSL
++
++
+ // Always use absl::string_view for Matcher<> specializations if googletest
+ // is built with absl support.
+ # define GTEST_INTERNAL_HAS_STRING_VIEW 1
+@@ -2339,25 +2305,9 @@ namespace internal {
+ using StringView = ::absl::string_view;
+ }  // namespace internal
+ }  // namespace testing
+-#else
+-# ifdef __has_include
+-#   if __has_include(<string_view>) && __cplusplus >= 201703L
+-// Otherwise for C++17 and higher use std::string_view for Matcher<>
+-// specializations.
+-#   define GTEST_INTERNAL_HAS_STRING_VIEW 1
+-#include <string_view>
+-namespace testing {
+-namespace internal {
+-using StringView = ::std::string_view;
+-}  // namespace internal
+-}  // namespace testing
+-// The case where absl is configured NOT to alias std::string_view is not
+-// supported.
+-#  endif  // __has_include(<string_view>) && __cplusplus >= 201703L
+-# endif  // __has_include
+-#endif  // GTEST_HAS_ABSL
+ 
+-#if GTEST_HAS_ABSL
++
++
+ // Always use absl::variant for UniversalPrinter<> specializations if googletest
+ // is built with absl support.
+ #define GTEST_INTERNAL_HAS_VARIANT 1
+@@ -2368,22 +2318,6 @@ template <typename... T>
+ using Variant = ::absl::variant<T...>;
+ }  // namespace internal
+ }  // namespace testing
+-#else
+-#ifdef __has_include
+-#if __has_include(<variant>) && __cplusplus >= 201703L
+-// Otherwise for C++17 and higher use std::variant for UniversalPrinter<>
+-// specializations.
+-#define GTEST_INTERNAL_HAS_VARIANT 1
+-#include <variant>
+-namespace testing {
+-namespace internal {
+-template <typename... T>
+-using Variant = ::std::variant<T...>;
+-}  // namespace internal
+-}  // namespace testing
+-// The case where absl is configured NOT to alias std::variant is not supported.
+-#endif  // __has_include(<variant>) && __cplusplus >= 201703L
+-#endif  // __has_include
+-#endif  // GTEST_HAS_ABSL
++
+ 
+ #endif  // GOOGLETEST_INCLUDE_GTEST_INTERNAL_GTEST_PORT_H_
+diff --git a/googletest/src/gtest-internal-inl.h b/googletest/src/gtest-internal-inl.h
+index 6d8cecbb..ae132aa0 100644
+--- a/googletest/src/gtest-internal-inl.h
++++ b/googletest/src/gtest-internal-inl.h
+@@ -453,7 +453,7 @@ class OsStackTraceGetter : public OsStackTraceGetterInterface {
+   void UponLeavingGTest() override;
+ 
+  private:
+-#if GTEST_HAS_ABSL
++
+   Mutex mutex_;  // Protects all internal state.
+ 
+   // We save the stack frame below the frame that calls user code.
+@@ -461,7 +461,7 @@ class OsStackTraceGetter : public OsStackTraceGetterInterface {
+   // the user code changes between the call to UponLeavingGTest()
+   // and any calls to the stack trace code from within the user code.
+   void* caller_frame_ = nullptr;
+-#endif  // GTEST_HAS_ABSL
++
+ 
+   GTEST_DISALLOW_COPY_AND_ASSIGN_(OsStackTraceGetter);
+ };
+diff --git a/googletest/src/gtest.cc b/googletest/src/gtest.cc
+index 21c611af..177fc729 100644
+--- a/googletest/src/gtest.cc
++++ b/googletest/src/gtest.cc
+@@ -127,12 +127,12 @@
+ #endif
+ #endif
+ 
+-#if GTEST_HAS_ABSL
++
+ #include "absl/debugging/failure_signal_handler.h"
+ #include "absl/debugging/stacktrace.h"
+ #include "absl/debugging/symbolize.h"
+ #include "absl/strings/str_cat.h"
+-#endif  // GTEST_HAS_ABSL
++
+ 
+ namespace testing {
+ 
+@@ -4940,7 +4940,7 @@ const char* const OsStackTraceGetterInterface::kElidedFramesMarker =
+ 
+ std::string OsStackTraceGetter::CurrentStackTrace(int max_depth, int skip_count)
+     GTEST_LOCK_EXCLUDED_(mutex_) {
+-#if GTEST_HAS_ABSL
++
+   std::string result;
+ 
+   if (max_depth <= 0) {
+@@ -4980,16 +4980,10 @@ std::string OsStackTraceGetter::CurrentStackTrace(int max_depth, int skip_count)
+   }
+ 
+   return result;
+-
+-#else  // !GTEST_HAS_ABSL
+-  static_cast<void>(max_depth);
+-  static_cast<void>(skip_count);
+-  return "";
+-#endif  // GTEST_HAS_ABSL
+ }
+ 
+ void OsStackTraceGetter::UponLeavingGTest() GTEST_LOCK_EXCLUDED_(mutex_) {
+-#if GTEST_HAS_ABSL
++
+   void* caller_frame = nullptr;
+   if (absl::GetStackTrace(&caller_frame, 1, 3) <= 0) {
+     caller_frame = nullptr;
+@@ -4997,7 +4991,7 @@ void OsStackTraceGetter::UponLeavingGTest() GTEST_LOCK_EXCLUDED_(mutex_) {
+ 
+   MutexLock lock(&mutex_);
+   caller_frame_ = caller_frame;
+-#endif  // GTEST_HAS_ABSL
++
+ }
+ 
+ // A helper class that creates the premature-exit file in its
+@@ -5651,12 +5645,12 @@ void UnitTestImpl::PostFlagParsingInit() {
+     ConfigureStreamingOutput();
+ #endif  // GTEST_CAN_STREAM_RESULTS_
+ 
+-#if GTEST_HAS_ABSL
++
+     if (GTEST_FLAG(install_failure_signal_handler)) {
+       absl::FailureSignalHandlerOptions options;
+       absl::InstallFailureSignalHandler(options);
+     }
+-#endif  // GTEST_HAS_ABSL
++
+   }
+ }
+ 
+@@ -6638,9 +6632,9 @@ void InitGoogleTestImpl(int* argc, CharType** argv) {
+     g_argvs.push_back(StreamableToString(argv[i]));
+   }
+ 
+-#if GTEST_HAS_ABSL
++
+   absl::InitializeSymbolizer(g_argvs[0].c_str());
+-#endif  // GTEST_HAS_ABSL
++
+ 
+   ParseGoogleTestFlagsOnly(argc, argv);
+   GetUnitTestImpl()->PostFlagParsingInit();

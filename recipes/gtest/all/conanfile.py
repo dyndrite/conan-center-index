@@ -148,8 +148,7 @@ class GTestConan(ConanFile):
         if self.settings.os == "Windows" and self.settings.compiler == "gcc":
             cmake.definitions["gtest_disable_pthreads"] = True
         if self.options.with_abseil:
-            cmake.definitions["GTEST_HAS_ABSL"] = "ON"
-            # cmake.definitions["absl_DIR"] = r"C:\Dyndrite\.conan\data\abseil\20211102.0\_\_\package\3fb49604f9c2f729b85ba3115852006824e72cab"
+            cmake.definitions["GTEST_HAS_ABSL"] = "True"
         cmake.definitions["gtest_hide_internal_symbols"] = self.options.hide_symbols
         cmake.configure(build_folder=self._build_subfolder)
         return cmake
@@ -192,6 +191,7 @@ class GTestConan(ConanFile):
                 self.cpp_info.components["libgtest"].defines.append("GTEST_LANG_CXX11=1")
                 self.cpp_info.components["libgtest"].defines.append("GTEST_HAS_TR1_TUPLE=0")
         if self.options.with_abseil:
+            self.cpp_info.components["libgtest"].defines.append("GTEST_HAS_ABSL=1")
             self.cpp_info.components["libgtest"].requires.extend(["abseil::abseil", "abseil::absl_strings", "abseil::absl_stacktrace", "abseil::absl_symbolize", "abseil::absl_failure_signal_handler", "abseil::absl_base"])
 
         # gtest_main
